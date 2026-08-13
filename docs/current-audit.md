@@ -12,8 +12,6 @@ python scripts/audit_dataset.py
 
 The command also warns when the two files contain different races.
 
-The command also warns when the two files contain different races.
-
 ## Data
 
 - FastF1 provides the data.
