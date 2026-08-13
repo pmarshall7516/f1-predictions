@@ -36,7 +36,9 @@ def extract_pre_race_from_session(
             continue
         grid = r.get("GridPosition")
         if pd.isna(grid):
-            grid = finish
+            # Keep the input empty. Do not use the finish position here.
+            # The model fills the value from the training data.
+            grid = float("nan")
         rows.append(
             {
                 "year": year,
@@ -48,6 +50,7 @@ def extract_pre_race_from_session(
                 "driver_number": str(r.get("DriverNumber", "")),
                 "team": str(r.get("TeamName", "")),
                 "grid_position": float(grid),
+                "grid_position_missing": int(pd.isna(grid)),
                 "finish_position": float(finish),
                 "quali_to_race_delta": float(grid) - float(finish),
                 **weather,
@@ -85,9 +88,18 @@ def add_historical_features(pre_race: pd.DataFrame, window: int = ROLLING_WINDOW
             df.at[idx, "driver_roll_finish_5"] = d_hist["finish_position"].mean()
             df.at[idx, "driver_quali_race_conv"] = d_hist["quali_to_race_delta"].mean()
 
-        t_hist = prior[prior["team"] == row["team"]].tail(window)
+        # A team has two driver rows per race. First make one team value for
+        # each race. Then use the last ``window`` team races.
+        t_hist = prior[prior["team"] == row["team"]]
         if len(t_hist):
-            df.at[idx, "team_roll_finish_5"] = t_hist["finish_position"].mean()
+            t_race_hist = (
+                t_hist.groupby("race_seq", as_index=False)["finish_position"]
+                .mean()
+                .sort_values("race_seq")
+                .tail(window)
+            )
+            if len(t_race_hist):
+                df.at[idx, "team_roll_finish_5"] = t_race_hist["finish_position"].mean()
 
         c_hist = prior[prior["circuit"] == row["circuit"]]
         if len(c_hist):

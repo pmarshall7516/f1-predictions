@@ -11,6 +11,7 @@ from sklearn.preprocessing import OrdinalEncoder
 
 PRE_RACE_FEATURES = [
     "grid_position",
+    "grid_position_missing",
     "driver_roll_finish_5",
     "team_roll_finish_5",
     "track_avg_finish",
@@ -41,6 +42,52 @@ IN_RACE_FEATURES = [
 
 IN_RACE_FEATURES_ABLATION = [c for c in IN_RACE_FEATURES if c != "pre_race_pred"]
 
+# These fields support the new race-state model. The baseline fields above
+# stay unchanged.
+IN_RACE_STATE_FEATURES = [
+    "current_position",
+    "driver_enc",
+    "team_enc",
+    "circuit_enc",
+    "compound_enc",
+    "position_delta_from_grid",
+    "position_change_last_lap",
+    "position_change_last_3",
+    "gap_to_leader",
+    "gap_ahead",
+    "gap_behind",
+    "lap_number",
+    "lap_fraction",
+    "laps_remaining",
+    "tyre_age",
+    "stint_number",
+    "pit_this_lap",
+    "pits_so_far",
+    "already_pitted",
+    "track_status_yellow",
+    "track_status_sc",
+    "track_status_vsc",
+    "track_status_red",
+    "track_status_changed",
+    "track_status_laps_since_change",
+    "sc_laps_last_3",
+    "vsc_laps_last_3",
+    "interruption_laps_last_5",
+    "lap_time_sec",
+    "lap_time_vs_field_median",
+    "lap_pace_rank",
+    "lap_delta_to_pb",
+    "roll_lap_3",
+    "roll_lap_5",
+    "pre_race_pred",
+]
+
+# The residual model predicts future movement. It does not use the current
+# position or the pre-race prediction as input.
+IN_RACE_RESIDUAL_FEATURES = [
+    c for c in IN_RACE_STATE_FEATURES if c not in {"current_position", "pre_race_pred"}
+]
+
 
 def encode_categoricals(
     train: pd.DataFrame,
@@ -48,7 +95,7 @@ def encode_categoricals(
     cols: list[str] | None = None,
 ) -> tuple[OrdinalEncoder, list[pd.DataFrame]]:
     """Fit ordinal encoders on train categoricals; transform all frames."""
-    cols = cols or ["driver", "team", "circuit"]
+    cols = ["driver", "team", "circuit"] if cols is None else cols
     enc = OrdinalEncoder(handle_unknown="use_encoded_value", unknown_value=-1)
     enc.fit(train[cols].astype(str))
     out = []
@@ -111,3 +158,30 @@ def oof_pre_race_predictions(
     )
     final.fit(X, y)
     return oof, final
+
+
+def add_position_delta_target(
+    frame: pd.DataFrame,
+    *,
+    current_col: str = "current_position",
+    finish_col: str = "finish_position",
+    target_col: str = "finish_delta",
+) -> pd.DataFrame:
+    """Add finish position minus current position as the target."""
+
+    out = frame.copy()
+    out[target_col] = out[finish_col] - out[current_col]
+    return out
+
+
+def reconstruct_finish_from_delta(
+    current_position,
+    predicted_delta,
+    *,
+    min_position: float = 1.0,
+    max_position: float = 20.0,
+) -> np.ndarray:
+    """Convert a movement prediction to a finish-position prediction."""
+
+    result = np.asarray(current_position, dtype=float) + np.asarray(predicted_delta, dtype=float)
+    return np.clip(result, min_position, max_position)

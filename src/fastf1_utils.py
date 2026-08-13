@@ -61,7 +61,7 @@ def retry_call(fn, *, desc: str, max_retries: int = 4, base_sleep: float = 3700.
 
 
 def get_feature_events(year: int) -> pd.DataFrame:
-    """Return race weekends for a season (exclude testing)."""
+    """Return completed feature-race weekends for one season."""
 
     def _load():
         schedule = fastf1.get_event_schedule(year, include_testing=False)
@@ -69,6 +69,10 @@ def get_feature_events(year: int) -> pd.DataFrame:
         events = events[events["RoundNumber"] > 0].copy()
         if "EventFormat" in events.columns:
             events = events[~events["EventFormat"].astype(str).str.lower().eq("testing")]
+        if "EventDate" in events.columns:
+            event_dates = pd.to_datetime(events["EventDate"], errors="coerce", utc=True)
+            now = pd.Timestamp.now(tz="UTC")
+            events = events[event_dates.isna() | (event_dates <= now)]
         return events.reset_index(drop=True)
 
     result = retry_call(_load, desc=f"schedule {year}")

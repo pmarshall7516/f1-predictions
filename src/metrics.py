@@ -55,3 +55,31 @@ def regression_metrics(y_true, y_pred, max_pos: float | None = None) -> dict:
 def metrics_table(rows: list[dict]) -> pd.DataFrame:
     """Build a tidy metrics DataFrame from a list of metric dicts with a name key."""
     return pd.DataFrame(rows)
+
+
+def metrics_by_lap(
+    frame: pd.DataFrame,
+    predictions,
+    *,
+    target_col: str = "finish_position",
+    lap_col: str = "lap_number",
+    race_col: str = "race_id",
+) -> pd.DataFrame:
+    """Return metrics for each completed-lap checkpoint.
+
+    The table includes sample and race counts.
+    """
+
+    work = frame[[target_col, lap_col, race_col]].copy()
+    work["prediction"] = np.asarray(predictions, dtype=float)
+    rows = []
+    for lap, group in work.groupby(lap_col, sort=True):
+        rows.append(
+            {
+                "lap_number": lap,
+                "samples": int(len(group)),
+                "races": int(group[race_col].nunique()),
+                **regression_metrics(group[target_col], group["prediction"]),
+            }
+        )
+    return pd.DataFrame(rows)

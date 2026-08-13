@@ -1,0 +1,2 @@
+lap_number,Actual finish,Naive current position,RF pre-race,XGB normal,XGB ablation,XGB tuned,XGB tuned ablation,Residual fixed,Residual fixed (no current),Residual tuned,Residual tuned (no current)
+0,22.0,2.0,9.770184768070058,,,,,,,,

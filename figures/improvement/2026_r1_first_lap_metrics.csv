@@ -1,0 +1,10 @@
+model,mae,rmse,top1_exact,top3_hit,top10_hit
+Naive current position,4.0,5.4589,0.05,0.65,0.95
+XGB normal,2.9121,4.2427,0.1,0.65,0.95
+XGB ablation,3.2499,4.6611,0.15,0.7,0.95
+XGB tuned,2.9976,4.3204,0.1,0.6,0.95
+XGB tuned ablation,3.2357,4.6355,0.15,0.7,0.95
+Residual fixed,3.2813,4.5161,0.15,0.65,0.95
+Residual fixed (no current),3.1365,4.5272,0.15,0.65,0.95
+Residual tuned,3.589,4.873,0.1,0.6,0.95
+Residual tuned (no current),3.3817,4.6423,0.05,0.7,0.95

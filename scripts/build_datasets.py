@@ -39,11 +39,19 @@ def _existing_race_ids(path: Path) -> set[str]:
     return set(df["race_id"].astype(str).unique())
 
 
-def build(years: list[int], sleep_between_events: float = 1.5, load_quali_weather: bool = False) -> None:
+def build(
+    years: list[int],
+    sleep_between_events: float = 1.5,
+    load_quali_weather: bool = False,
+    rebuild: bool = False,
+) -> None:
     enable_cache()
     PROCESSED_DIR.mkdir(parents=True, exist_ok=True)
 
-    done_ids = _existing_race_ids(PRE_RACE_PATH) | _existing_race_ids(IN_RACE_PATH)
+    pre_done = _existing_race_ids(PRE_RACE_PATH)
+    in_done = _existing_race_ids(IN_RACE_PATH)
+    # Skip a race only when both output files contain it.
+    done_ids = set() if rebuild else (pre_done & in_done)
     if done_ids:
         logger.info("Resuming; %s race_ids already present", len(done_ids))
 
@@ -75,12 +83,18 @@ def build(years: list[int], sleep_between_events: float = 1.5, load_quali_weathe
 
             event_name = str(event.get("EventName", f"Round {round_number}"))
             circuit = str(event.get("Location", event.get("Country", event_name)))
-
             race = load_session(year, round_number, "R", laps=True)
             if race is None:
                 logger.warning("Skipping %s — race session unavailable", race_id)
                 time.sleep(sleep_between_events)
                 continue
+
+            scheduled_laps = None
+            candidate = pd.to_numeric(
+                pd.Series([getattr(race, "total_laps", None)]), errors="coerce"
+            ).iloc[0]
+            if not pd.isna(candidate) and candidate > 0:
+                scheduled_laps = int(candidate)
 
             quali = None
             if load_quali_weather:
@@ -89,7 +103,14 @@ def build(years: list[int], sleep_between_events: float = 1.5, load_quali_weathe
             pre = extract_pre_race_from_session(
                 race, year, round_number, event_name, circuit, quali=quali
             )
-            laps = extract_in_race_from_session(race, year, round_number, event_name, circuit)
+            laps = extract_in_race_from_session(
+                race,
+                year,
+                round_number,
+                event_name,
+                circuit,
+                scheduled_laps=scheduled_laps,
+            )
 
             if pre is not None:
                 pre_frames.append(pre)
@@ -147,7 +168,7 @@ def parse_args() -> argparse.Namespace:
         type=int,
         nargs="+",
         default=ALL_YEARS,
-        help="Seasons to download/build (default: 2019–2025)",
+        help="Seasons to download/build (default: 2019–current calendar year)",
     )
     parser.add_argument(
         "--sleep",
@@ -160,9 +181,19 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Also load qualifying for weather features (uses more API calls)",
     )
+    parser.add_argument(
+        "--rebuild",
+        action="store_true",
+        help="Re-extract selected seasons even when their race_ids already exist",
+    )
     return parser.parse_args()
 
 
 if __name__ == "__main__":
     args = parse_args()
-    build(args.years, sleep_between_events=args.sleep, load_quali_weather=args.quali_weather)
+    build(
+        args.years,
+        sleep_between_events=args.sleep,
+        load_quali_weather=args.quali_weather,
+        rebuild=args.rebuild,
+    )
